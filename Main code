@@ -1,0 +1,102 @@
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay
+from matplotlib.colors import ListedColormap
+
+# Load dataset
+df = pd.read_csv('/content/drive/MyDrive/Iris.csv')
+
+# Prepare features and labels
+X = df.iloc[:, 1:-1].values  # Exclude ID and target column
+y = df.iloc[:, -1].values    # Species column
+
+# Normalize features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Encode labels to numeric
+le = LabelEncoder()
+y_encoded = le.fit_transform(y)
+
+# Split dataset
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
+
+# Train and evaluate KNN with different K values
+accuracies = []
+k_range = range(1, 11)
+
+for k in k_range:
+    knn = KNeighborsClassifier(n_neighbors=k)
+    knn.fit(X_train, y_train)
+    y_pred = knn.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    accuracies.append(acc)
+    print(f"K={k} -> Accuracy: {acc:.2f}")
+
+#  Plot accuracy vs. K
+plt.figure(figsize=(8, 5))
+plt.plot(k_range, accuracies, marker='o')
+plt.title('KNN Accuracy for different values of K')
+plt.xlabel('Number of Neighbors (K)')
+plt.ylabel('Accuracy')
+plt.grid(True)
+plt.show()
+
+# Final model with best K
+best_k = k_range[np.argmax(accuracies)]
+print(f"\nBest K = {best_k} with Accuracy = {max(accuracies):.2f}")
+
+knn_best = KNeighborsClassifier(n_neighbors=best_k)
+knn_best.fit(X_train, y_train)
+y_pred_final = knn_best.predict(X_test)
+
+# Confusion Matrix
+cm = confusion_matrix(y_test, y_pred_final, labels=knn_best.classes_)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=knn_best.classes_)
+disp.plot(cmap='Blues')
+plt.title('Confusion Matrix')
+plt.show()
+
+# Decision Boundary using first 2 features
+X_vis = X_scaled[:, :2]  # Use only first 2 features
+y_vis = le.transform(y)  # Convert labels to numbers
+X_train_vis, X_test_vis, y_train_vis, y_test_vis = train_test_split(X_vis, y_vis, test_size=0.3, random_state=42)
+
+knn_vis = KNeighborsClassifier(n_neighbors=best_k)
+knn_vis.fit(X_train_vis, y_train_vis)
+
+# Create mesh grid
+x_min, x_max = X_vis[:, 0].min() - 1, X_vis[:, 0].max() + 1
+y_min, y_max = X_vis[:, 1].min() - 1, X_vis[:, 1].max() + 1
+xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.02),
+                     np.arange(y_min, y_max, 0.02))
+
+Z = knn_vis.predict(np.c_[xx.ravel(), yy.ravel()])
+Z = Z.reshape(xx.shape)
+
+# Plot decision boundaries
+plt.figure(figsize=(10, 6))
+cmap_light = ListedColormap(['#FFAAAA', '#AAFFAA', '#AAAAFF'])
+cmap_bold = ListedColormap(['#FF0000', '#00FF00', '#0000FF'])
+
+plt.contourf(xx, yy, Z, cmap=cmap_light)
+
+# Plot actual points
+scatter = plt.scatter(X_vis[:, 0], X_vis[:, 1], c=y_vis, cmap=cmap_bold, edgecolor='k', s=40)
+
+# Use a proper manual legend mapping
+from matplotlib.patches import Patch
+legend_labels = le.classes_
+legend_handles = [Patch(color=cmap_bold(i), label=legend_labels[i]) for i in range(len(legend_labels))]
+plt.legend(handles=legend_handles, title="Species")
+
+plt.title(f"KNN Decision Boundary (k={best_k}) using First 2 Features")
+plt.xlabel('Standardized Feature 1')
+plt.ylabel('Standardized Feature 2')
+plt.grid(True)
+plt.show()
